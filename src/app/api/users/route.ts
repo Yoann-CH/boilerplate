@@ -3,6 +3,7 @@ import { createUserSchema } from '@/models/user';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { DEFAULT_AVATAR_URL } from '@/constants/defaults';
+import { DBFallback } from '@/lib/db-fallback';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,9 +23,18 @@ export async function GET(request: NextRequest) {
     }
     
     const { limit } = validatedParams.data;
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
+    
+    let users;
+    try {
+      // Essayer d'obtenir les données depuis la base de données
+      users = await prisma.user.findMany({
+        orderBy: { createdAt: 'desc' }
+      });
+    } catch (dbError) {
+      console.error('Erreur de connexion à la base de données, utilisation du fallback:', dbError);
+      // Utiliser le fallback en cas d'erreur de connexion à la base de données
+      users = DBFallback.getUsers();
+    }
     
     return NextResponse.json({
       users: limit ? users.slice(0, limit) : users,
@@ -58,10 +68,17 @@ export async function POST(request: NextRequest) {
       userData.avatar = DEFAULT_AVATAR_URL;
     }
     
-    // Créer l'utilisateur
-    const newUser = await prisma.user.create({
-      data: userData
-    });
+    let newUser;
+    try {
+      // Essayer de créer l'utilisateur dans la base de données
+      newUser = await prisma.user.create({
+        data: userData
+      });
+    } catch (dbError) {
+      console.error('Erreur de connexion à la base de données, utilisation du fallback:', dbError);
+      // Utiliser le fallback en cas d'erreur de connexion à la base de données
+      newUser = DBFallback.createUser(userData);
+    }
     
     return NextResponse.json(newUser, { status: 201 });
   } catch (error) {

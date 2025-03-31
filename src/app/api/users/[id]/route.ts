@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { updateUserSchema } from '@/models/user';
 import { DEFAULT_AVATAR_URL } from '@/constants/defaults';
+import { DBFallback } from '@/lib/db-fallback';
 
 // GET /api/users/[id] - Récupérer un utilisateur par ID
 export async function GET(
@@ -11,9 +12,17 @@ export async function GET(
   try {
     const id = params.id;
     
-    const user = await prisma.user.findUnique({
-      where: { id }
-    });
+    let user;
+    try {
+      // Essayer d'obtenir l'utilisateur depuis la base de données
+      user = await prisma.user.findUnique({
+        where: { id }
+      });
+    } catch (dbError) {
+      console.error('Erreur de connexion à la base de données, utilisation du fallback:', dbError);
+      // Utiliser le fallback en cas d'erreur de connexion à la base de données
+      user = DBFallback.getUserById(id);
+    }
     
     if (!user) {
       return NextResponse.json(
@@ -53,10 +62,44 @@ export async function PATCH(
     // Extraire les données validées
     const userData = validationResult.data;
     
-    // Vérifier si l'utilisateur existe
-    const userExists = await prisma.user.findUnique({
-      where: { id }
-    });
+    let userExists = false;
+    let updatedUser;
+    
+    try {
+      // Vérifier si l'utilisateur existe
+      const existingUser = await prisma.user.findUnique({
+        where: { id }
+      });
+      
+      userExists = !!existingUser;
+      
+      if (userExists) {
+        // Si l'avatar est vide dans la mise à jour, utiliser l'avatar par défaut
+        if (userData.avatar === '') {
+          userData.avatar = DEFAULT_AVATAR_URL;
+        }
+        
+        // Mettre à jour l'utilisateur
+        updatedUser = await prisma.user.update({
+          where: { id },
+          data: userData
+        });
+      }
+    } catch (dbError) {
+      console.error('Erreur de connexion à la base de données, utilisation du fallback:', dbError);
+      // Utiliser le fallback en cas d'erreur de connexion à la base de données
+      userExists = !!DBFallback.getUserById(id);
+      
+      if (userExists) {
+        // Si l'avatar est vide dans la mise à jour, utiliser l'avatar par défaut
+        if (userData.avatar === '') {
+          userData.avatar = DEFAULT_AVATAR_URL;
+        }
+        
+        // Mettre à jour l'utilisateur via le fallback
+        updatedUser = DBFallback.updateUser(id, userData);
+      }
+    }
     
     if (!userExists) {
       return NextResponse.json(
@@ -64,17 +107,6 @@ export async function PATCH(
         { status: 404 }
       );
     }
-    
-    // Si l'avatar est vide dans la mise à jour, utiliser l'avatar par défaut
-    if (userData.avatar === '') {
-      userData.avatar = DEFAULT_AVATAR_URL;
-    }
-    
-    // Mettre à jour l'utilisateur
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data: userData
-    });
     
     return NextResponse.json(updatedUser);
   } catch (error) {
@@ -94,10 +126,34 @@ export async function DELETE(
   try {
     const id = params.id;
     
-    // Vérifier si l'utilisateur existe
-    const userExists = await prisma.user.findUnique({
-      where: { id }
-    });
+    let userExists = false;
+    let deleteResult = false;
+    
+    try {
+      // Vérifier si l'utilisateur existe
+      const existingUser = await prisma.user.findUnique({
+        where: { id }
+      });
+      
+      userExists = !!existingUser;
+      
+      if (userExists) {
+        // Supprimer l'utilisateur
+        await prisma.user.delete({
+          where: { id }
+        });
+        deleteResult = true;
+      }
+    } catch (dbError) {
+      console.error('Erreur de connexion à la base de données, utilisation du fallback:', dbError);
+      // Utiliser le fallback en cas d'erreur de connexion à la base de données
+      userExists = !!DBFallback.getUserById(id);
+      
+      if (userExists) {
+        // Supprimer l'utilisateur via le fallback
+        deleteResult = DBFallback.deleteUser(id);
+      }
+    }
     
     if (!userExists) {
       return NextResponse.json(
@@ -106,12 +162,7 @@ export async function DELETE(
       );
     }
     
-    // Supprimer l'utilisateur
-    await prisma.user.delete({
-      where: { id }
-    });
-    
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: deleteResult });
   } catch (error) {
     console.error(`Erreur lors de la suppression de l'utilisateur:`, error);
     return NextResponse.json(
