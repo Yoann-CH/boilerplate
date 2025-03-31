@@ -1,4 +1,6 @@
 import { Product } from '@/models/product';
+import { DEFAULT_PRODUCT_IMAGE_URL } from '@/constants/defaults';
+import { supabase } from '@/utils/supabase';
 
 // Interface pour le service produit (Principe de ségrégation des interfaces)
 export interface IProductService {
@@ -9,113 +11,106 @@ export interface IProductService {
   deleteProduct(id: string): Promise<boolean>;
 }
 
-// Implémentation concrète du service produit avec l'API route (Principe de responsabilité unique)
+// Implémentation concrète du service produit (Principe de responsabilité unique)
 export class ProductService implements IProductService {
+  
   async getProducts(): Promise<Product[]> {
-    try {
-      const response = await fetch('/api/products');
-      
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      return data as Product[];
-    } catch (error) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*');
+    
+    if (error) {
       console.error('Erreur lors de la récupération des produits:', error);
       return [];
     }
+    
+    return data.map(product => ({
+      ...product,
+      createdAt: new Date(product.createdAt)
+    }));
   }
 
   async getProductById(id: string): Promise<Product | null> {
-    try {
-      const response = await fetch(`/api/products/${id}`);
-      
-      if (response.status === 404) {
-        return null;
-      }
-      
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      return data as Product;
-    } catch (error) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
       console.error(`Erreur lors de la récupération du produit ${id}:`, error);
       return null;
     }
+    
+    return data ? {
+      ...data,
+      createdAt: new Date(data.createdAt)
+    } : null;
   }
 
   async createProduct(productData: Omit<Product, 'id' | 'createdAt'> | Partial<Omit<Product, 'id' | 'createdAt'>>): Promise<Product> {
-    try {
-      const response = await fetch('/api/products', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(productData),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Erreur HTTP: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      return data as Product;
-    } catch (error) {
+    // Si l'URL de l'image n'est pas fournie, utiliser l'image par défaut
+    const imageUrl = productData.imageUrl?.trim() ? productData.imageUrl : DEFAULT_PRODUCT_IMAGE_URL;
+    
+    const newProduct = {
+      ...productData,
+      imageUrl,
+      createdAt: new Date().toISOString()
+    };
+    
+    const { data, error } = await supabase
+      .from('products')
+      .insert(newProduct)
+      .select()
+      .single();
+    
+    if (error) {
       console.error('Erreur lors de la création du produit:', error);
-      throw new Error('Impossible de créer le produit');
+      throw new Error(`Erreur lors de la création du produit: ${error.message}`);
     }
+    
+    return {
+      ...data,
+      createdAt: new Date(data.createdAt)
+    };
   }
 
   async updateProduct(id: string, productData: Partial<Omit<Product, 'id' | 'createdAt'>>): Promise<Product | null> {
-    try {
-      const response = await fetch(`/api/products/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(productData),
-      });
-      
-      if (response.status === 404) {
-        return null;
-      }
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Erreur HTTP: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      return data as Product;
-    } catch (error) {
+    // Si l'URL de l'image est vide dans la mise à jour, utiliser l'image par défaut
+    if (productData.imageUrl === '') {
+      productData.imageUrl = DEFAULT_PRODUCT_IMAGE_URL;
+    }
+
+    const { data, error } = await supabase
+      .from('products')
+      .update(productData)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) {
       console.error(`Erreur lors de la mise à jour du produit ${id}:`, error);
       return null;
     }
+    
+    return data ? {
+      ...data,
+      createdAt: new Date(data.createdAt)
+    } : null;
   }
 
   async deleteProduct(id: string): Promise<boolean> {
-    try {
-      const response = await fetch(`/api/products/${id}`, {
-        method: 'DELETE',
-      });
-      
-      if (response.status === 404) {
-        return false;
-      }
-      
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-      
-      return true;
-    } catch (error) {
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
       console.error(`Erreur lors de la suppression du produit ${id}:`, error);
       return false;
     }
+    
+    return true;
   }
 }
 

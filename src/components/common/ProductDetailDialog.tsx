@@ -24,24 +24,11 @@ export function ProductDetailDialog({ product, trigger }: ProductDetailDialogPro
     }).format(price);
   };
 
-  const formatDate = (date: Date | string | null | undefined) => {
-    if (!date) return 'Date inconnue';
-    
-    try {
-      const dateObj = date instanceof Date ? date : new Date(date);
-      // Vérifier si la date est valide
-      if (isNaN(dateObj.getTime())) {
-        return 'Date invalide';
-      }
-      
-      return new Intl.DateTimeFormat('fr-FR', {
-        dateStyle: 'long',
-        timeStyle: 'short',
-      }).format(dateObj);
-    } catch (error) {
-      console.error('Erreur de formatage de date:', error);
-      return 'Date non disponible';
-    }
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat('fr-FR', {
+      dateStyle: 'long',
+      timeStyle: 'short',
+    }).format(date);
   };
 
   return (
