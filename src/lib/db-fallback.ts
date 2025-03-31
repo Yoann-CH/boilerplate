@@ -36,7 +36,7 @@ export class DBFallback {
       name: faker.person.fullName(),
       email: faker.internet.email(),
       role: faker.helpers.arrayElement(['admin', 'user', 'guest']),
-      createdAt: faker.date.recent(),
+      createdAt: new Date(),
       avatar: faker.image.avatar(),
     };
   }
@@ -53,7 +53,7 @@ export class DBFallback {
       category: faker.helpers.arrayElement(['électronique', 'vêtements', 'alimentation', 'maison', 'loisirs']),
       stock: faker.number.int({ min: 0, max: 100 }),
       imageUrl: `https://picsum.photos/seed/${faker.string.alphanumeric(8)}/200/300`,
-      createdAt: faker.date.recent(),
+      createdAt: new Date(),
     };
   }
 
