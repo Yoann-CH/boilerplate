@@ -1,63 +1,87 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { productService } from '@/services/productService';
+import prisma from '@/lib/prisma';
 import { createProductSchema } from '@/models/product';
-import { z } from 'zod';
+import { DEFAULT_PRODUCT_IMAGE_URL } from '@/constants/defaults';
+import { Category } from '@prisma/client';
 
-export async function GET(request: NextRequest) {
-  try {
-    // Validation des paramètres de requête
-    const searchParamsSchema = z.object({
-      limit: z.string().optional().transform(val => val ? parseInt(val) : undefined),
-      category: z.string().optional(),
-    });
-    
-    const searchParams = Object.fromEntries(request.nextUrl.searchParams);
-    const validatedParams = searchParamsSchema.safeParse(searchParams);
-    
-    if (!validatedParams.success) {
-      return NextResponse.json(
-        { error: 'Paramètres de requête invalides', details: validatedParams.error.format() },
-        { status: 400 }
-      );
-    }
-    
-    const { limit, category } = validatedParams.data;
-    let products = await productService.getProducts();
-    
-    // Filtrer par catégorie si spécifié
-    if (category) {
-      products = products.filter(p => p.category === category);
-    }
-    
-    return NextResponse.json({
-      products: limit ? products.slice(0, limit) : products,
-      total: products.length
-    });
-  } catch (error) {
-    console.error('Erreur lors de la récupération des produits:', error);
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
+// Fonction utilitaire pour mapper les catégories
+function mapCategoryToPrisma(category?: string): Category {
+  switch(category) {
+    case 'électronique':
+      return Category.electronique;
+    case 'vêtements':
+      return Category.vetements;
+    case 'alimentation':
+      return Category.alimentation;
+    case 'maison':
+      return Category.maison;
+    case 'loisirs':
+      return Category.loisirs;
+    default:
+      return Category.electronique; // Catégorie par défaut
   }
 }
 
-export async function POST(request: NextRequest) {
+// GET /api/products - Récupérer tous les produits
+export async function GET() {
+  try {
+    const products = await prisma.product.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    return NextResponse.json(products);
+  } catch (error) {
+    console.error('Erreur lors de la récupération des produits:', error);
+    return NextResponse.json(
+      { error: 'Erreur lors de la récupération des produits' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST /api/products - Créer un nouveau produit
+export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    // Validation du corps de la requête avec le schéma Zod
-    const validatedData = createProductSchema.safeParse(body);
-    
-    if (!validatedData.success) {
+    // Valider les données avec Zod
+    const validationResult = createProductSchema.safeParse(body);
+    if (!validationResult.success) {
       return NextResponse.json(
-        { error: 'Données invalides', details: validatedData.error.format() },
+        { error: 'Données invalides', details: validationResult.error.format() },
         { status: 400 }
       );
     }
     
-    const newProduct = await productService.createProduct(validatedData.data);
+    // Extraire les données validées
+    const productData = validationResult.data;
+    
+    // Si l'URL de l'image est vide, utiliser l'image par défaut
+    if (!productData.imageUrl) {
+      productData.imageUrl = DEFAULT_PRODUCT_IMAGE_URL;
+    }
+    
+    // Convertir la catégorie
+    const category = mapCategoryToPrisma(productData.category);
+    
+    // Créer le produit
+    const newProduct = await prisma.product.create({
+      data: {
+        name: productData.name,
+        description: productData.description,
+        price: productData.price,
+        stock: productData.stock,
+        category,
+        imageUrl: productData.imageUrl,
+      }
+    });
     
     return NextResponse.json(newProduct, { status: 201 });
   } catch (error) {
     console.error('Erreur lors de la création du produit:', error);
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Erreur lors de la création du produit' },
+      { status: 500 }
+    );
   }
 } 
