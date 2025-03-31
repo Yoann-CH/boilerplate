@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { createProductSchema } from '@/models/product';
 import { DEFAULT_PRODUCT_IMAGE_URL } from '@/constants/defaults';
