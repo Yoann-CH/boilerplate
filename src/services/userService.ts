@@ -1,6 +1,4 @@
-import { faker } from '@faker-js/faker/locale/fr';
 import { User } from '@/models/user';
-import { DEFAULT_AVATAR_URL } from '@/constants/defaults';
 
 // Interface pour le service utilisateur (Principe de ségrégation des interfaces)
 export interface IUserService {
@@ -11,74 +9,113 @@ export interface IUserService {
   deleteUser(id: string): Promise<boolean>;
 }
 
-// Implémentation concrète du service utilisateur (Principe de responsabilité unique)
+// Implémentation concrète du service utilisateur avec l'API route (Principe de responsabilité unique)
 export class UserService implements IUserService {
-  private users: User[] = [];
-  
-  constructor() {
-    // Générer des utilisateurs mockés au démarrage
-    this.users = Array.from({ length: 10 }, () => this.generateMockUser());
-  }
-
-  private generateMockUser(): User {
-    return {
-      id: faker.string.uuid(),
-      name: faker.person.fullName(),
-      email: faker.internet.email(),
-      role: faker.helpers.arrayElement(['admin', 'user', 'guest']),
-      createdAt: faker.date.recent(),
-      avatar: faker.image.avatar(),
-    };
-  }
-
   async getUsers(): Promise<User[]> {
-    return this.users;
+    try {
+      const response = await fetch('/api/users');
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data as User[];
+    } catch (error) {
+      console.error('Erreur lors de la récupération des utilisateurs:', error);
+      return [];
+    }
   }
 
   async getUserById(id: string): Promise<User | null> {
-    const user = this.users.find(u => u.id === id);
-    return user || null;
+    try {
+      const response = await fetch(`/api/users/${id}`);
+      
+      if (response.status === 404) {
+        return null;
+      }
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data as User;
+    } catch (error) {
+      console.error(`Erreur lors de la récupération de l'utilisateur ${id}:`, error);
+      return null;
+    }
   }
 
   async createUser(userData: Omit<User, 'id' | 'createdAt'> | Partial<Omit<User, 'id' | 'createdAt'>>): Promise<User> {
-    // Si l'avatar n'est pas fourni, utiliser l'avatar par défaut
-    const avatar = userData.avatar?.trim() ? userData.avatar : DEFAULT_AVATAR_URL;
-    
-    const newUser: User = {
-      ...userData,
-      avatar,
-      id: faker.string.uuid(),
-      createdAt: new Date(),
-    } as User; // Ajout d'un cast pour gérer le cas où des champs requis pourraient être absents
-    
-    this.users.push(newUser);
-    return newUser;
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Erreur HTTP: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data as User;
+    } catch (error) {
+      console.error('Erreur lors de la création de l\'utilisateur:', error);
+      throw new Error('Impossible de créer l\'utilisateur');
+    }
   }
 
   async updateUser(id: string, userData: Partial<Omit<User, 'id' | 'createdAt'>>): Promise<User | null> {
-    const index = this.users.findIndex(u => u.id === id);
-    if (index === -1) {
+    try {
+      const response = await fetch(`/api/users/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
+      
+      if (response.status === 404) {
+        return null;
+      }
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Erreur HTTP: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data as User;
+    } catch (error) {
+      console.error(`Erreur lors de la mise à jour de l'utilisateur ${id}:`, error);
       return null;
     }
-
-    // Si l'avatar est vide dans la mise à jour, utiliser l'avatar par défaut
-    if (userData.avatar === '') {
-      userData.avatar = DEFAULT_AVATAR_URL;
-    }
-
-    // Mise à jour de l'utilisateur
-    this.users[index] = {
-      ...this.users[index],
-      ...userData,
-    };
-
-    return this.users[index];
   }
 
   async deleteUser(id: string): Promise<boolean> {
-    const initialLength = this.users.length;
-    this.users = this.users.filter(user => user.id !== id);
-    return this.users.length < initialLength;
+    try {
+      const response = await fetch(`/api/users/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.status === 404) {
+        return false;
+      }
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error(`Erreur lors de la suppression de l'utilisateur ${id}:`, error);
+      return false;
+    }
   }
 }
 

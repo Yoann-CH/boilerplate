@@ -1,6 +1,4 @@
-import { faker } from '@faker-js/faker/locale/fr';
 import { Product } from '@/models/product';
-import { DEFAULT_PRODUCT_IMAGE_URL } from '@/constants/defaults';
 
 // Interface pour le service produit (Principe de ségrégation des interfaces)
 export interface IProductService {
@@ -11,76 +9,113 @@ export interface IProductService {
   deleteProduct(id: string): Promise<boolean>;
 }
 
-// Implémentation concrète du service produit (Principe de responsabilité unique)
+// Implémentation concrète du service produit avec l'API route (Principe de responsabilité unique)
 export class ProductService implements IProductService {
-  private products: Product[] = [];
-  
-  constructor() {
-    // Générer des produits mockés au démarrage
-    this.products = Array.from({ length: 15 }, () => this.generateMockProduct());
-  }
-
-  private generateMockProduct(): Product {
-    return {
-      id: faker.string.uuid(),
-      name: faker.commerce.productName(),
-      description: faker.commerce.productDescription(),
-      price: parseFloat(faker.commerce.price({ min: 10, max: 1000 })),
-      category: faker.helpers.arrayElement(['électronique', 'vêtements', 'alimentation', 'maison', 'loisirs']),
-      stock: faker.number.int({ min: 0, max: 100 }),
-      imageUrl: `https://picsum.photos/seed/${faker.string.alphanumeric(8)}/200/300`,
-      createdAt: faker.date.recent(),
-    };
-  }
-
   async getProducts(): Promise<Product[]> {
-    return this.products;
+    try {
+      const response = await fetch('/api/products');
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data as Product[];
+    } catch (error) {
+      console.error('Erreur lors de la récupération des produits:', error);
+      return [];
+    }
   }
 
   async getProductById(id: string): Promise<Product | null> {
-    const product = this.products.find(p => p.id === id);
-    return product || null;
+    try {
+      const response = await fetch(`/api/products/${id}`);
+      
+      if (response.status === 404) {
+        return null;
+      }
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data as Product;
+    } catch (error) {
+      console.error(`Erreur lors de la récupération du produit ${id}:`, error);
+      return null;
+    }
   }
 
   async createProduct(productData: Omit<Product, 'id' | 'createdAt'> | Partial<Omit<Product, 'id' | 'createdAt'>>): Promise<Product> {
-    // Si l'URL de l'image n'est pas fournie, utiliser l'image par défaut
-    const imageUrl = productData.imageUrl?.trim() ? productData.imageUrl : DEFAULT_PRODUCT_IMAGE_URL;
-    
-    const newProduct: Product = {
-      ...productData,
-      imageUrl,
-      id: faker.string.uuid(),
-      createdAt: new Date(),
-    } as Product; // Ajout d'un cast pour gérer le cas où des champs requis pourraient être absents
-    
-    this.products.push(newProduct);
-    return newProduct;
+    try {
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productData),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Erreur HTTP: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data as Product;
+    } catch (error) {
+      console.error('Erreur lors de la création du produit:', error);
+      throw new Error('Impossible de créer le produit');
+    }
   }
 
   async updateProduct(id: string, productData: Partial<Omit<Product, 'id' | 'createdAt'>>): Promise<Product | null> {
-    const index = this.products.findIndex(p => p.id === id);
-    if (index === -1) {
+    try {
+      const response = await fetch(`/api/products/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productData),
+      });
+      
+      if (response.status === 404) {
+        return null;
+      }
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Erreur HTTP: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data as Product;
+    } catch (error) {
+      console.error(`Erreur lors de la mise à jour du produit ${id}:`, error);
       return null;
     }
-
-    // Si l'URL de l'image est vide dans la mise à jour, utiliser l'image par défaut
-    if (productData.imageUrl === '') {
-      productData.imageUrl = DEFAULT_PRODUCT_IMAGE_URL;
-    }
-
-    // Mise à jour du produit
-    this.products[index] = {
-      ...this.products[index],
-      ...productData,
-    };
-
-    return this.products[index];
   }
 
   async deleteProduct(id: string): Promise<boolean> {
-    const initialLength = this.products.length;
-    this.products = this.products.filter(product => product.id !== id);
-    return this.products.length < initialLength;
+    try {
+      const response = await fetch(`/api/products/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.status === 404) {
+        return false;
+      }
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error(`Erreur lors de la suppression du produit ${id}:`, error);
+      return false;
+    }
   }
 }
 

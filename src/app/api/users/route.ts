@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { userService } from '@/services/userService';
 import { createUserSchema } from '@/models/user';
 import { z } from 'zod';
+import prisma from '@/lib/prisma';
+import { DEFAULT_AVATAR_URL } from '@/constants/defaults';
+import { userSchema, updateUserSchema } from '@/models/user';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +24,9 @@ export async function GET(request: NextRequest) {
     }
     
     const { limit } = validatedParams.data;
-    const users = await userService.getUsers();
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
     
     return NextResponse.json({
       users: limit ? users.slice(0, limit) : users,
@@ -47,7 +52,18 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const newUser = await userService.createUser(validatedData.data);
+    // Extraire les données validées
+    const userData = validatedData.data;
+    
+    // Si l'avatar est vide, utiliser l'avatar par défaut
+    if (!userData.avatar) {
+      userData.avatar = DEFAULT_AVATAR_URL;
+    }
+    
+    // Créer l'utilisateur
+    const newUser = await prisma.user.create({
+      data: userData
+    });
     
     return NextResponse.json(newUser, { status: 201 });
   } catch (error) {
