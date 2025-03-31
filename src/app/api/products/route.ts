@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { createProductSchema } from '@/models/product';
 import { DEFAULT_PRODUCT_IMAGE_URL } from '@/constants/defaults';
 import { Category } from '@prisma/client';
+import { DBFallback } from '@/lib/db-fallback';
 
 // Fonction utilitaire pour mapper les catégories
 function mapCategoryToPrisma(category?: string): Category {
@@ -25,9 +26,17 @@ function mapCategoryToPrisma(category?: string): Category {
 // GET /api/products - Récupérer tous les produits
 export async function GET() {
   try {
-    const products = await prisma.product.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
+    let products;
+    try {
+      // Essayer d'obtenir les produits depuis la base de données
+      products = await prisma.product.findMany({
+        orderBy: { createdAt: 'desc' }
+      });
+    } catch (dbError) {
+      console.error('Erreur de connexion à la base de données, utilisation du fallback:', dbError);
+      // Utiliser le fallback en cas d'erreur de connexion à la base de données
+      products = DBFallback.getProducts();
+    }
     
     return NextResponse.json(products);
   } catch (error) {
@@ -61,20 +70,27 @@ export async function POST(request: Request) {
       productData.imageUrl = DEFAULT_PRODUCT_IMAGE_URL;
     }
     
-    // Convertir la catégorie
-    const category = mapCategoryToPrisma(productData.category);
-    
-    // Créer le produit
-    const newProduct = await prisma.product.create({
-      data: {
-        name: productData.name,
-        description: productData.description,
-        price: productData.price,
-        stock: productData.stock,
-        category,
-        imageUrl: productData.imageUrl,
-      }
-    });
+    let newProduct;
+    try {
+      // Convertir la catégorie
+      const category = mapCategoryToPrisma(productData.category);
+      
+      // Tenter de créer le produit dans la base de données
+      newProduct = await prisma.product.create({
+        data: {
+          name: productData.name,
+          description: productData.description,
+          price: productData.price,
+          stock: productData.stock,
+          category,
+          imageUrl: productData.imageUrl,
+        }
+      });
+    } catch (dbError) {
+      console.error('Erreur de connexion à la base de données, utilisation du fallback:', dbError);
+      // Utiliser le fallback en cas d'erreur de connexion à la base de données
+      newProduct = DBFallback.createProduct(productData);
+    }
     
     return NextResponse.json(newProduct, { status: 201 });
   } catch (error) {
