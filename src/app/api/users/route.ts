@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { userService } from '@/services/userService';
 import { createUserSchema } from '@/models/user';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { DEFAULT_AVATAR_URL } from '@/constants/defaults';
-import { userSchema, updateUserSchema } from '@/models/user';
 
 export async function GET(request: NextRequest) {
   try {

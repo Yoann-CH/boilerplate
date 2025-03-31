@@ -90,7 +90,7 @@ export async function PATCH(
     }
     
     // Préparer les données pour la mise à jour
-    const updateData: any = { ...productData };
+    const updateData: Record<string, unknown> = { ...productData };
     
     // Convertir la catégorie si elle est présente
     if (productData.category) {
