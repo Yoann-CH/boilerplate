@@ -26,7 +26,8 @@ describe('ProductService', () => {
   });
 
   it('devrait retourner null pour un ID inexistant', async () => {
-    const product = await productService.getProductById('id-inexistant');
+    // Utilisation de l'UUID nil comme ID inexistant valide
+    const product = await productService.getProductById('00000000-0000-0000-0000-000000000000');
     
     expect(product).toBeNull();
   });

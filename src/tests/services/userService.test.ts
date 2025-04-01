@@ -26,15 +26,17 @@ describe('UserService', () => {
   });
 
   it('devrait retourner null pour un ID inexistant', async () => {
-    const user = await userService.getUserById('id-inexistant');
+    // Utilisation de l'UUID nil comme ID inexistant valide
+    const user = await userService.getUserById('00000000-0000-0000-0000-000000000000');
     
     expect(user).toBeNull();
   });
 
   it('devrait créer un nouvel utilisateur', async () => {
+    const uniqueEmail = `test-${Date.now()}@example.com`; // Génération d'un email unique
     const nouveauUser: Omit<User, 'id' | 'createdAt'> = {
       name: 'Test User',
-      email: 'test@example.com',
+      email: uniqueEmail, // Utilisation de l'email unique
       role: 'user',
       avatar: 'https://example.com/avatar.jpg',
     };
